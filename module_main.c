@@ -60,68 +60,39 @@ long int strtol(const char* str, char** endptr, int base)
 /******* PARKING DEVICE **********/
 
 static int parking_open(struct inode *inode, struct file *file)
-{
-  /*int *count;
+{  
+	printk("Parking device open!\n");
 
-  count = kmalloc(sizeof(int), GFP_USER);
-  if (count == NULL) {
-    return -1;
-  }
-
-  *count = 0;
-  file->private_data = count;*/
-  
-  printk("Parking device open!\n");
-
-  return 0;
+	return 0;
 }
 
 static int parking_close(struct inode *inode, struct file *file)
 {
-  //kfree(file->private_data);
-  printk("Parking device close!\n");
+	printk("Parking device close!\n");
 
-  return 0;
+	return 0;
 }
 
 ssize_t parking_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
-  int res, err, *count;
+	//pid and tgid difference and relation w/ user space equivalent terms: https://stackoverflow.com/questions/13002444/list-all-threads-within-the-current-process
+	printk("Task %d is now sleeping\n", current->pid);
 
-  count = file->private_data;
-  *count = *count + 1;
-  if (*count == 10) {
-    return 0;
-  }
+	set_current_state(TASK_UNINTERRUPTIBLE);
+    schedule();
 
-  if (len > 10) {
-    res = 10;
-  } else {
-    res = len;
-  }
-  err = copy_to_user(buf, "hi there!\n", res);
-  if (err) {
-    return -EFAULT;
-  }
-  printk("Read %ld (%d)\n", len, *count);
-
-  return res;
+	return 0;
 }
 
 static struct file_operations parking_fops = {
-  .owner =        THIS_MODULE,
-  .read =         parking_read,
-  .open =         parking_open,
-  .release =      parking_close,
-#if 0
-  .write =        my_write,
-  .poll =         my_poll,
-  .fasync =       my_fasync,
-#endif
+	.owner =        THIS_MODULE,
+	.read =         parking_read,
+	.open =         parking_open,
+	.release =      parking_close,
 };
 
 static struct miscdevice parking_device = {
-  MISC_DYNAMIC_MINOR, "scheduler_parking", &parking_fops
+	MISC_DYNAMIC_MINOR, "scheduler_parking", &parking_fops
 };
 
 
@@ -130,28 +101,16 @@ static struct miscdevice parking_device = {
 
 static int communication_open(struct inode *inode, struct file *file)
 {
-  /*int *count;
+	printk("Communication device open!\n");
 
-  count = kmalloc(sizeof(int), GFP_USER);
-  if (count == NULL) {
-    return -1;
-  }
-
-  *count = 0;
-  file->private_data = count;*/
-
-  
-  printk("Communication device open!\n");
-
-  return 0;
+	return 0;
 }
 
 static int communication_close(struct inode *inode, struct file *file)
 {
-  //kfree(file->private_data);
-  printk("Communication device close!\n");
+	printk("Communication device close!\n");
 
-  return 0;
+	return 0;
 }
 
 ssize_t communication_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
@@ -261,15 +220,15 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 
 
 static struct file_operations communication_fops = {
-  .owner =        THIS_MODULE,
-  .read =         communication_read,
-  .open =         communication_open,
-  .release =      communication_close,
-  .write =        communication_write,
+	.owner =        THIS_MODULE,
+	.read =         communication_read,
+	.open =         communication_open,
+	.release =      communication_close,
+	.write =        communication_write,
 };
 
 static struct miscdevice communication_device = {
-  MISC_DYNAMIC_MINOR, "scheduler_setting", &communication_fops
+	MISC_DYNAMIC_MINOR, "scheduler_setting", &communication_fops
 };
 
 

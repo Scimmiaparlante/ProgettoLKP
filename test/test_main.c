@@ -16,7 +16,15 @@ int main()
 
 	read(fd, buf, 100);
 
-	printf("%s\n", buf); 
+	close(fd);
+
+	printf("%s\n", buf);
+
+	//block on parking
+	fd = open("/dev/scheduler_parking", O_RDWR);
+	read(fd, NULL, 0);
+
+
 
 	close(fd);
 }

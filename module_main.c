@@ -5,6 +5,7 @@
 #include <linux/miscdevice.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/delay.h>
 
 
 MODULE_AUTHOR("Matteo Zini");
@@ -30,6 +31,30 @@ long int slice_size;
 long int num_slices;
 
 struct scehdule_node* task_list;
+
+
+/*************** UTILITY FUNCTIONS *****************/
+
+long int strtol(const char* str, char** endptr, int base)
+{
+	long int res;
+	int err, i;
+	char temp_buf[10];
+
+	for (i = 0; str[i] >= '0' && str[i] <= '9'; i++)
+		temp_buf[i] = str[i];
+
+	temp_buf[i] = '\0';
+	
+	err = kstrtol (temp_buf, base, &res);
+	if (err) 
+		return -1;
+
+	//endptr setting (Do this at the end beacuse it could be a pointer to str!)
+	*endptr = (char*)str + i;
+	
+	return res;
+}
 
 
 /******* PARKING DEVICE **********/
@@ -133,18 +158,19 @@ ssize_t communication_read(struct file *file, char __user *buf, size_t len, loff
 {
 	char response[MAX_RESPONSE_LEN];
 	int resp_len = 0;
-	int err;
+	int err, i;
 
 	if (num_slices <= 0 || slice_size <= 0)
-	return -EFAULT;
+		return -EFAULT;
 
 	resp_len += sprintf(response, "num_slices: %ld; slice_size: %ld\n", num_slices, slice_size);
 
-	for (int i = 0; i < num_slices; i++) {
-	if (task_list->thread_id == 0)
-		resp_len += sprintf(response + len, "--,");
-	else
-		resp_len += sprintf(response + len, "%d,", task_list->thread_id);
+	for (i = 0; i < num_slices; i++) {
+
+		if (task_list[i].thread_id == 0)
+			resp_len += sprintf(response + resp_len, "--,");
+		else
+			resp_len += sprintf(response + resp_len, "%d,", task_list[i].thread_id);
 	}
 
 	if (resp_len >= len)
@@ -155,15 +181,15 @@ ssize_t communication_read(struct file *file, char __user *buf, size_t len, loff
 	if (err)
 		return -EFAULT;
 
-	return resp_len
+	return resp_len;
 }
 
 
 ssize_t communication_write(struct file *file, const char __user * buf, size_t count, loff_t *ppos)
 {
-	int err;
+	int err, i;
 	char message_buffer[MAX_MESS_LEN + 1];
-	char* message_buffer_initial = message_buffer;
+	char* message_buffer_ptr = message_buffer;
 	char* found;
 	long int slice_id, task_id;
 
@@ -178,52 +204,59 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 	message_buffer[count] = '\0';
 
 
-	while( (found = strsep(&message_buffer, ":;")) != NULL ) {
+	while( (found = strsep(&message_buffer_ptr, ":"), message_buffer_ptr != NULL) ) {
 
-		if(strncmp("slice_size", found, 10) == 0 && *message_buffer == ':') {
-			
-			slice_size = strtol(message_buffer, &message_buffer, 10);
+		if(strncmp("slice_size", found, 10) == 0) {
+
+			slice_size = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 			
 			if (slice_size <= 0)
 				return -EFAULT;
-		} else if (strncmp("num_slices", found, 10) == 0 && *message_buffer == ':' && num_slices == 0) {
 
-			slice_size = strtol(message_buffer, &message_buffer, 10);
-			
+		} else if (strncmp("num_slices", found, 10) == 0 && num_slices == 0) {
+
+			num_slices = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
+
 			if (num_slices <= 0)
 				return -EFAULT;
 
 			task_list = kmalloc(num_slices*sizeof(struct scehdule_node), GFP_KERNEL);
-			for (int i = 0; i < num_slices; i++) {
-				task_list->thread_id = 0;
-				task_list->slot_number = i;
+			for (i = 0; i < num_slices; i++) {
+				task_list[i].thread_id = 0;
+				task_list[i].slot_number = i;
 			}
-
 
 			if (task_list == NULL)
 				return -EFAULT;
 
 		} else if ((strncmp("slice", found, 5) == 0)) {
+			
+			slice_id = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 
-			slice_id = strtol(message_buffer, &message_buffer, 10);
-
-			if (slice_id <= 0 || slice_id > num_slices || *message_buffer == ',')
+			if (slice_id < 0 || slice_id >= num_slices || *message_buffer_ptr != ',')
 				return -EFAULT;
 
-			task_id = strtol(message_buffer, &message_buffer, 10);
+			message_buffer_ptr++;
+
+			task_id = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 
 			if (task_id <= 0)
 				return -EFAULT;
 
-			task_list[slice_id] = task_id;
-
-		} 
-		else {
+			task_list[slice_id].thread_id = task_id;
+		
+		} else {
 			return -EFAULT;
 		}
+
+		//check that next option is separed by a ';'
+		if(*message_buffer_ptr != ';')
+			break;
+
+		message_buffer_ptr++;
 	}
 
-  return message_buffer - message_buffer_initial;
+	return message_buffer_ptr - message_buffer;
 }
 
 

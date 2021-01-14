@@ -11,8 +11,6 @@ module: module_main.c
 test/test_main: test/test_main.c
 	gcc test/test_main.c -Wall -Wextra -o test/test_main -pthread
 	find test | cpio -H newc -o | gzip > file_system/test_fs.gz
-	#find test/test_run.sh | cpio -H newc -o | cat file_system/test_fs.gz
-
 
 
 clean:

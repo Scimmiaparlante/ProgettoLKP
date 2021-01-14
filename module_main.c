@@ -78,9 +78,11 @@ int scheduler_body(void* arg)
 		time_cycle_start = ktime_get_ns();
 		
 		for (i = 0; i < num_slices; i++) {
-			task = pid_task(find_vpid(task_list[i].thread_id), PIDTYPE_PID);
+			if(task_list[i].thread_id != 0) {
 
-			wake_up_process(task);
+				task = pid_task(find_vpid(task_list[i].thread_id), PIDTYPE_PID);
+				wake_up_process(task);
+			}
 
 			delay_us = ( (time_cycle_start + (i+1)*1000*slice_size) - ktime_get_ns() ) / 1000;
 			usleep_range(delay_us, delay_us);

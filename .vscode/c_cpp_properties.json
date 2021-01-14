@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/matteo/Desktop/Corsi/LinuxKernelProgramming/linux-5.8.14/include/",
+                "/home/matteo/Desktop/Corsi/LinuxKernelProgramming/linux-5.8.14/arch/x86/include/",
+                "/home/matteo/Desktop/Corsi/LinuxKernelProgramming/linux-5.8.14/arch/x86/include/generated",
+                "/home/matteo/Desktop/Corsi/LinuxKernelProgramming/linux-5.8.14/include/uapi/"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu89",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}

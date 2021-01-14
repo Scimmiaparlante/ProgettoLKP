@@ -6,7 +6,8 @@
 #include <linux/slab.h>
 #include <linux/list.h>
 #include <linux/delay.h>
-
+#include <linux/kthread.h>
+#include <linux/types.h>
 
 MODULE_AUTHOR("Matteo Zini");
 MODULE_DESCRIPTION("Scheduler");
@@ -19,7 +20,7 @@ MODULE_LICENSE("GPL");
 /*************** DATA STRUCTURES *******************/
 
 
-struct scehdule_node {
+struct schedule_node {
     int slot_number;
 	int thread_id;
 };
@@ -30,7 +31,7 @@ struct scehdule_node {
 long int slice_size;
 long int num_slices;
 
-struct scehdule_node* task_list;
+struct schedule_node* task_list;
 
 
 /*************** UTILITY FUNCTIONS *****************/
@@ -55,6 +56,80 @@ long int strtol(const char* str, char** endptr, int base)
 	
 	return res;
 }
+
+
+
+
+/*************** SCHEDULER FUNCTIONS *****************/
+
+
+static struct task_struct* sched_thread_descr;
+
+
+int scheduler_body(void* arg)
+{
+	uint64_t time_cycle_start, delay_us;
+	int i;
+	struct task_struct* task;
+
+	printk("The scheduler is running!");
+
+ 	while (!kthread_should_stop()) {
+		time_cycle_start = ktime_get_ns();
+		
+		for (i = 0; i < num_slices; i++) {
+			task = pid_task(find_vpid(task_list[i].thread_id), PIDTYPE_PID);
+
+			wake_up_process(task);
+
+			delay_us = ( (time_cycle_start + (i+1)*1000*slice_size) - ktime_get_ns() ) / 1000;
+			usleep_range(delay_us, delay_us);
+		}
+		
+		
+		printk("The scheduler is hardly working for you");
+		msleep(1000);
+	}
+
+	printk("The scheduler is terminating!");
+
+	return 0;
+}
+
+
+int start_scheduler(void)
+{
+	printk("Starting the scheduler...");
+	sched_thread_descr = kthread_run(scheduler_body, NULL, "scheduler_thread");
+
+	if (IS_ERR(sched_thread_descr)) {
+    	printk("Error creating kernel thread!\n");
+
+    	return PTR_ERR(sched_thread_descr);
+	}
+
+	return 0;
+}
+
+void stop_scheduler(void)
+{
+	int res;
+
+	printk("Stopping the scheduler...");
+  
+	res = kthread_stop(sched_thread_descr);
+
+	printk("Schduler killed with result: %d\n", res);
+}
+
+
+
+
+
+
+
+
+
 
 
 /******* PARKING DEVICE **********/
@@ -179,7 +254,7 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 			if (num_slices <= 0)
 				return -EFAULT;
 
-			task_list = kmalloc(num_slices*sizeof(struct scehdule_node), GFP_KERNEL);
+			task_list = kmalloc(num_slices*sizeof(struct schedule_node), GFP_KERNEL);
 			for (i = 0; i < num_slices; i++) {
 				task_list[i].thread_id = 0;
 				task_list[i].slot_number = i;
@@ -203,6 +278,22 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 				return -EFAULT;
 
 			task_list[slice_id].thread_id = task_id;
+		
+		} else if ((strncmp("ctrl", found, 5) == 0)) {
+			found = strsep(&message_buffer_ptr, ";");
+
+			if (found == NULL)
+				return -EFAULT;
+
+			if (strcmp(found, "start") == 0)
+				start_scheduler();
+			else if (strcmp(found, "stop") == 0)
+				stop_scheduler();
+			else
+				return -EFAULT;
+			
+			//skip final part because it has been already done
+			continue;
 		
 		} else {
 			return -EFAULT;

@@ -72,28 +72,30 @@ int scheduler_body(void* arg)
 	int i;
 	struct task_struct* task;
 
-	printk("The scheduler is running!");
+	printk("The scheduler is running!\n");
 
  	while (!kthread_should_stop()) {
 		time_cycle_start = ktime_get_ns();
 		
 		for (i = 0; i < num_slices; i++) {
-			if(task_list[i].thread_id != 0) {
 
-				task = pid_task(find_vpid(task_list[i].thread_id), PIDTYPE_PID);
+			long int tid = task_list[i].thread_id;
+
+			if(tid != 0) {
+
+				printk("[%d, %ld] Scheduling task", i, tid);		
+
+				task = pid_task(find_vpid(tid), PIDTYPE_PID);
 				wake_up_process(task);
 			}
 
-			delay_us = ( (time_cycle_start + (i+1)*1000*slice_size) - ktime_get_ns() ) / 1000;
+			delay_us = ( (time_cycle_start + (i+1)*1000000*slice_size) - ktime_get_ns() ) / 1000;
+			printk("%d - sleep for %llu\n", i, delay_us);
 			usleep_range(delay_us, delay_us);
 		}
-		
-		
-		printk("The scheduler is hardly working for you");
-		msleep(1000);
 	}
 
-	printk("The scheduler is terminating!");
+	printk("The scheduler is terminating!\n");
 
 	return 0;
 }
@@ -101,7 +103,7 @@ int scheduler_body(void* arg)
 
 int start_scheduler(void)
 {
-	printk("Starting the scheduler...");
+	printk("Starting the scheduler...\n");
 	sched_thread_descr = kthread_run(scheduler_body, NULL, "scheduler_thread");
 
 	if (IS_ERR(sched_thread_descr)) {
@@ -117,7 +119,7 @@ void stop_scheduler(void)
 {
 	int res;
 
-	printk("Stopping the scheduler...");
+	printk("Stopping the scheduler...\n");
   
 	res = kthread_stop(sched_thread_descr);
 
@@ -153,7 +155,7 @@ static int parking_close(struct inode *inode, struct file *file)
 ssize_t parking_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
 	//pid and tgid difference and relation w/ user space equivalent terms: https://stackoverflow.com/questions/13002444/list-all-threads-within-the-current-process
-	printk("Task %d is now sleeping\n", current->pid);
+	printk("Task %d put to sleep\n", current->pid);
 
 	set_current_state(TASK_UNINTERRUPTIBLE);
     schedule();

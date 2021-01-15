@@ -37,15 +37,17 @@ void* thread_body_common(void* sched_slot)
 	fd = open("/dev/scheduler_parking", O_RDWR);
 	read(fd, NULL, 0);
 
-	//do things ...
 //	thread_bodies[ (int)(long long int)sched_slot ]();
 	while(1) {
+
+		//------------------- THREAD SPECIFIC OPS ------------------------------------------------------------		
 		int cont;
 
-		for(i = 0; i < 1000000000; i++)
+		for(i = 0; i < 10000000; i++)
 			cont += rand();
 
-		printf("%d -- result:%d", (int)(long long int)sched_slot, cont);
+		printf("[%d, %ld] result:%d\n", (int)(long long int)sched_slot, gettid(), cont);
+		//-----------------------------------------------------------------------------------------------------
 
 		read(fd, NULL, 0);
 	}
@@ -84,7 +86,7 @@ int main()
 
 	write(fd, "ctrl:start;", 12);
 
-	sleep(5);
+	sleep(20);
 
 	write(fd, "ctrl:stop;", 11);
 

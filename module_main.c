@@ -4,10 +4,14 @@
 #include <linux/init.h>
 #include <linux/miscdevice.h>
 #include <linux/slab.h>
-#include <linux/list.h>
+//#include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/types.h>
+#include <linux/sched.h>
+#include <uapi/linux/sched/types.h>
+
+
 
 MODULE_AUTHOR("Matteo Zini");
 MODULE_DESCRIPTION("Scheduler");
@@ -66,34 +70,66 @@ long int strtol(const char* str, char** endptr, int base)
 static struct task_struct* sched_thread_descr;
 
 
+/* 
+ * Read these for thread priority setting: 
+ * https://programmersought.com/article/60764199712/
+ * https://lkml.org/lkml/2020/4/22/1067
+*/
+
 int scheduler_body(void* arg)
 {
-	uint64_t time_cycle_start, delay_us;
 	int i;
 	struct task_struct* task;
+	uint64_t time_cycle_start, delay_us;
 
 	printk("The scheduler is running!\n");
 
+	//make all the tasks rt tasks
+	for (i = 0; i < num_slices; i++) {
+
+		long int tid = task_list[i].thread_id;
+
+		if(tid != 0) {
+			struct sched_param params = { .sched_priority = 98 };
+
+			task = pid_task(find_vpid(tid), PIDTYPE_PID);
+			sched_setscheduler(task, SCHED_FIFO, &params);						
+		}
+	}
+
+	//------------------ MAIN LOOP --------------------
  	while (!kthread_should_stop()) {
+
 		time_cycle_start = ktime_get_ns();
 		
 		for (i = 0; i < num_slices; i++) {
 
 			long int tid = task_list[i].thread_id;
 
-			if(tid != 0) {
-
+			//schedule
+			if (tid != 0) {
 				printk("[%d, %ld] Scheduling task", i, tid);		
 
 				task = pid_task(find_vpid(tid), PIDTYPE_PID);
 				wake_up_process(task);
 			}
 
+			//sleep
 			delay_us = ( (time_cycle_start + (i+1)*1000000*slice_size) - ktime_get_ns() ) / 1000;
 			printk("%d - sleep for %llu\n", i, delay_us);
 			usleep_range(delay_us, delay_us);
+
+			//de-schedule
+			if (tid != 0) {
+
+				printk("[%d, %ld] De-scheduling task", i, tid);
+
+				//really, deschedule it!!!
+			}
+
 		}
 	}
+	//------------------ END MAIN LOOP -----------------------
 
 	printk("The scheduler is terminating!\n");
 
@@ -103,14 +139,22 @@ int scheduler_body(void* arg)
 
 int start_scheduler(void)
 {
+	struct sched_param params;
+
 	printk("Starting the scheduler...\n");
 	sched_thread_descr = kthread_run(scheduler_body, NULL, "scheduler_thread");
+
 
 	if (IS_ERR(sched_thread_descr)) {
     	printk("Error creating kernel thread!\n");
 
     	return PTR_ERR(sched_thread_descr);
 	}
+
+	//set real-time priority for the schedulerparams = {
+	params.sched_priority = 99;
+
+	sched_setscheduler(sched_thread_descr, SCHED_FIFO, &params);
 
 	return 0;
 }

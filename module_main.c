@@ -9,7 +9,11 @@
 #include <linux/kthread.h>
 #include <linux/types.h>
 #include <linux/sched.h>
+#include <linux/sched/prio.h>
+#include <linux/sched/types.h>
 #include <uapi/linux/sched/types.h>
+#include <uapi/linux/sched.h>
+#include <linux/cpumask.h>
 
 
 
@@ -76,11 +80,13 @@ static struct task_struct* sched_thread_descr;
  * https://lkml.org/lkml/2020/4/22/1067
 */
 
+
 int scheduler_body(void* arg)
 {
 	int i;
 	struct task_struct* task;
 	uint64_t time_cycle_start, delay_us;
+	//struct cpumask mask;
 
 	printk("The scheduler is running!\n");
 
@@ -92,8 +98,12 @@ int scheduler_body(void* arg)
 		if(tid != 0) {
 			struct sched_param params = { .sched_priority = 98 };
 
-			task = pid_task(find_vpid(tid), PIDTYPE_PID);
-			sched_setscheduler(task, SCHED_FIFO, &params);						
+			/*task = pid_task(find_vpid(tid), PIDTYPE_PID);
+			sched_setscheduler(task, SCHED_FIFO, &params);*/
+
+			/*cpumask_clear(&mask);
+			cpumask_set_cpu(smp_processor_id(), &mask);
+			sched_setaffinity(tid, &mask);	*/					
 		}
 	}
 
@@ -125,8 +135,10 @@ int scheduler_body(void* arg)
 				printk("[%d, %ld] De-scheduling task", i, tid);
 
 				//really, deschedule it!!!
+//				task->sched_class->dequeue_task(cpu_rq(smp_processor_id()), task, 0x9);
+//				deactivate_task(&per_cpu(runqueues, smp_processor_id()), task, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
+				//suspend_task(task);
 			}
-
 		}
 	}
 	//------------------ END MAIN LOOP -----------------------
@@ -394,3 +406,36 @@ static void testmodule_exit(void)
 
 module_init(testmodule_init);
 module_exit(testmodule_exit);
+
+
+
+/* by Matteo Zini on 25/01/2021 */
+/*void suspend_task(struct task_struct *tsk)
+{
+	struct rq *rq;
+	struct rq_flags rf;
+	int cpu;
+
+	//preempt_disable();
+
+	cpu = smp_processor_id();
+	rq = cpu_rq(cpu);
+
+	//local_irq_disable();
+
+	rq_lock(rq, &rf);
+	smp_mb__after_spinlock();
+
+	// Promote REQ to ACT
+	rq->clock_update_flags <<= 1;
+	update_rq_clock(rq);
+
+	deactivate_task(rq, tsk, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
+
+	rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
+	//rq_unlock_irq(rq, &rf);
+
+	//sched_preempt_enable_no_resched();
+}
+
+EXPORT_SYMBOL(suspend_task);*/

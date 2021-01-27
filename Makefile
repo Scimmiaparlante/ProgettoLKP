@@ -22,4 +22,3 @@ clean:
 run:
 	cat file_system/tinyfs.gz file_system/test_fs.gz file_system/keyb.gz file_system/module_fs.gz > file_system/complete_fs.gz
 	qemu-system-x86_64 -kernel ../linux-5.8.14/arch/x86_64/boot/bzImage -initrd file_system/complete_fs.gz
-

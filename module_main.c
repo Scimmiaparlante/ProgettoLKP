@@ -86,7 +86,7 @@ int scheduler_body(void* arg)
 	int i;
 	struct task_struct* task;
 	uint64_t time_cycle_start, delay_us;
-	//struct cpumask mask;
+	struct cpumask mask;
 
 	printk("The scheduler is running!\n");
 
@@ -98,12 +98,12 @@ int scheduler_body(void* arg)
 		if(tid != 0) {
 			struct sched_param params = { .sched_priority = 98 };
 
-			/*task = pid_task(find_vpid(tid), PIDTYPE_PID);
-			sched_setscheduler(task, SCHED_FIFO, &params);*/
+			task = pid_task(find_vpid(tid), PIDTYPE_PID);
+			sched_setscheduler(task, SCHED_FIFO, &params);
 
-			/*cpumask_clear(&mask);
+			cpumask_clear(&mask);
 			cpumask_set_cpu(smp_processor_id(), &mask);
-			sched_setaffinity(tid, &mask);	*/					
+			sched_setaffinity(tid, &mask);
 		}
 	}
 
@@ -118,7 +118,7 @@ int scheduler_body(void* arg)
 
 			//schedule
 			if (tid != 0) {
-				printk("[%d, %ld] Scheduling task", i, tid);		
+				printk("[%d, %ld] Scheduling task\n", i, tid);		
 
 				task = pid_task(find_vpid(tid), PIDTYPE_PID);
 				wake_up_process(task);
@@ -132,12 +132,13 @@ int scheduler_body(void* arg)
 			//de-schedule
 			if (tid != 0) {
 
-				printk("[%d, %ld] De-scheduling task", i, tid);
+				printk("[%d, %ld] De-scheduling task\n", i, tid);
 
 				//really, deschedule it!!!
 //				task->sched_class->dequeue_task(cpu_rq(smp_processor_id()), task, 0x9);
 //				deactivate_task(&per_cpu(runqueues, smp_processor_id()), task, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
 				//suspend_task(task);
+				task->state = TASK_UNINTERRUPTIBLE;
 			}
 		}
 	}
@@ -152,6 +153,7 @@ int scheduler_body(void* arg)
 int start_scheduler(void)
 {
 	struct sched_param params;
+	struct cpumask mask;
 
 	printk("Starting the scheduler...\n");
 	sched_thread_descr = kthread_run(scheduler_body, NULL, "scheduler_thread");
@@ -163,10 +165,14 @@ int start_scheduler(void)
     	return PTR_ERR(sched_thread_descr);
 	}
 
-	//set real-time priority for the schedulerparams = {
+	//set real-time priority for the scheduler
 	params.sched_priority = 99;
 
 	sched_setscheduler(sched_thread_descr, SCHED_FIFO, &params);
+
+	cpumask_clear(&mask);
+	cpumask_set_cpu(smp_processor_id(), &mask);
+	sched_setaffinity(sched_thread_descr->pid, &mask);
 
 	return 0;
 }

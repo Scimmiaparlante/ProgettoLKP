@@ -41,15 +41,15 @@ void* thread_body_common(void* sched_slot)
 	while(1) {
 
 		//------------------- THREAD SPECIFIC OPS ------------------------------------------------------------		
-		int cont;
+		unsigned int cont;
 
-		for(i = 0; i < 10000000; i++)
+		for(i = 0; i < 3000000/*0*/; i++)
 			cont += rand();
 
-		printf("[%d, %ld] result:%d\n", (int)(long long int)sched_slot, gettid(), cont);
+		printf("[%d, %ld] ...\n", (int)(long long int)sched_slot, gettid());//result:%u\n", (int)(long long int)sched_slot, gettid(), cont);
 		//-----------------------------------------------------------------------------------------------------
 
-		read(fd, NULL, 0);
+		//read(fd, NULL, 0);
 	}
 
 	close(fd);

@@ -90,6 +90,11 @@ int scheduler_body(void* arg)
 
 	printk("The scheduler is running!\n");
 
+	//scheduler's affinity
+	cpumask_clear(&mask);
+	cpumask_set_cpu(smp_processor_id(), &mask);
+	sched_setaffinity(current->pid, &mask);
+
 	//make all the tasks rt tasks
 	for (i = 0; i < num_slices; i++) {
 
@@ -120,7 +125,6 @@ int scheduler_body(void* arg)
 			if (tid != 0) {
 				printk("[%d, %ld] Scheduling task\n", i, tid);		
 
-				task = pid_task(find_vpid(tid), PIDTYPE_PID);
 				wake_up_process(task);
 			}
 
@@ -134,11 +138,7 @@ int scheduler_body(void* arg)
 
 				printk("[%d, %ld] De-scheduling task\n", i, tid);
 
-				//really, deschedule it!!!
-//				task->sched_class->dequeue_task(cpu_rq(smp_processor_id()), task, 0x9);
-//				deactivate_task(&per_cpu(runqueues, smp_processor_id()), task, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
-				//suspend_task(task);
-				task->state = TASK_UNINTERRUPTIBLE;
+				suspend_task(task);
 			}
 		}
 	}
@@ -153,7 +153,6 @@ int scheduler_body(void* arg)
 int start_scheduler(void)
 {
 	struct sched_param params;
-	struct cpumask mask;
 
 	printk("Starting the scheduler...\n");
 	sched_thread_descr = kthread_run(scheduler_body, NULL, "scheduler_thread");
@@ -169,10 +168,6 @@ int start_scheduler(void)
 	params.sched_priority = 99;
 
 	sched_setscheduler(sched_thread_descr, SCHED_FIFO, &params);
-
-	cpumask_clear(&mask);
-	cpumask_set_cpu(smp_processor_id(), &mask);
-	sched_setaffinity(sched_thread_descr->pid, &mask);
 
 	return 0;
 }
@@ -219,7 +214,7 @@ ssize_t parking_read(struct file *file, char __user *buf, size_t len, loff_t *pp
 	//pid and tgid difference and relation w/ user space equivalent terms: https://stackoverflow.com/questions/13002444/list-all-threads-within-the-current-process
 	printk("Task %d put to sleep\n", current->pid);
 
-	set_current_state(TASK_UNINTERRUPTIBLE);
+	set_current_state(TASK_INTERRUPTIBLE);
     schedule();
 
 	return 0;

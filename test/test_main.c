@@ -16,7 +16,6 @@
 //void (*thread_bodies[NUM_SLOTS])(void) = { };
 
 
-
 void* thread_body_common(void* sched_slot)
 {
 	int fd, i;	
@@ -43,13 +42,11 @@ void* thread_body_common(void* sched_slot)
 		//------------------- THREAD SPECIFIC OPS ------------------------------------------------------------		
 		unsigned int cont;
 
-		for(i = 0; i < 3000000/*0*/; i++)
-			cont += rand();
+		for(i = 0; i < 80000000/*0*/; i++)
+			cont += i;
 
 		printf("[%d, %ld] ...\n", (int)(long long int)sched_slot, gettid());//result:%u\n", (int)(long long int)sched_slot, gettid(), cont);
 		//-----------------------------------------------------------------------------------------------------
-
-		//read(fd, NULL, 0);
 	}
 
 	close(fd);
@@ -71,7 +68,7 @@ int main()
 
 	int fd = open("/dev/scheduler_setting", O_RDWR);
 
-	write(fd, "num_slices:5;slice_size:1000", 29);
+	write(fd, "num_slices:5;slice_size:2000", 29);
 	read(fd, buf, 100);
 
 	printf("%s\n", buf);
@@ -86,7 +83,7 @@ int main()
 
 	write(fd, "ctrl:start;", 12);
 
-	sleep(20);
+	sleep(200);
 
 	write(fd, "ctrl:stop;", 11);
 

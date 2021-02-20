@@ -1,0 +1,69 @@
+/*
+ * THIS FILE CONTAINS THE CODE TO ADD TO THE LINUX KERNEL IN ORDER TO MAKE
+ * THE MODULE WORK. EACH PART MUST BE PLACED IN THE CORRECT POSITION
+ * (I.E. WHEN THE SYMBOLS USED HAVE ALREADY BEEN DEFINED)
+ */
+ 
+/*
+ * FILE: kernel/sched/core.c
+ */
+ 
+void suspend_task(struct task_struct *tsk)
+{
+	struct rq *rq;
+	struct rq_flags rf;
+
+	if (tsk->state != TASK_RUNNING) {
+		printk("Not running!!!\n");
+		return;
+	}
+
+	rq = task_rq_lock(tsk, &rf);
+
+	tsk->state = TASK_INTERRUPTIBLE;
+
+	/* needed if you want to use TASK_UNINTERRUPTIBLE */
+	/*
+	tsk->sched_contributes_to_load = (tsk->state & TASK_UNINTERRUPTIBLE) && !(tsk->state & TASK_NOLOAD) && !(tsk->flags & PF_FROZEN);
+
+	if (tsk->sched_contributes_to_load)
+		rq->nr_uninterruptible++;
+	*/
+
+	deactivate_task(rq, tsk, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
+
+	if (tsk->in_iowait) {
+		atomic_inc(&rq->nr_iowait);
+		delayacct_blkio_start();
+	}
+
+	task_rq_unlock(rq, tsk, &rf);
+}
+
+EXPORT_SYMBOL(suspend_task);
+
+//---------------------------------------------------------------
+EXPORT_SYMBOL(sched_setaffinity);
+//---------------------------------------------------------------
+
+/*
+ * The module works with Linux 5.8.14
+ * On newer versions (probably starting from 5.9), also sched_setscheduler() has been removed from the export. 
+ * Thus, you should also add this: (for more info: https://lkml.org/lkml/2020/4/22/1068)
+ */
+ 
+EXPORT_SYMBOL_GPL(sched_setscheduler);
+
+
+/*
+ * FILE: include/linux/sched.h
+ */
+
+/* by Matteo Zini on 25/01/2021 */
+extern void suspend_task(struct task_struct *tsk);
+extern long sched_setaffinity(pid_t pid, const struct cpumask *in_mask);
+
+/* This should still be there. However, if it will get removed, because of the same things as before... */
+extern int sched_setscheduler(struct task_struct *, int, const struct sched_param *);
+
+

@@ -13,8 +13,6 @@
 #define gettid() syscall(SYS_gettid)
 
 
-//void (*thread_bodies[NUM_SLOTS])(void) = { };
-
 
 void* thread_body_common(void* sched_slot)
 {
@@ -36,7 +34,6 @@ void* thread_body_common(void* sched_slot)
 	fd = open("/dev/scheduler_parking", O_RDWR);
 	read(fd, NULL, 0);
 
-//	thread_bodies[ (int)(long long int)sched_slot ]();
 	while(1) {
 
 		//------------------- THREAD SPECIFIC OPS ------------------------------------------------------------		
@@ -59,7 +56,6 @@ void* thread_body_common(void* sched_slot)
 
 
 
-
 int main()
 {
 	char buf[100];
@@ -68,7 +64,7 @@ int main()
 
 	int fd = open("/dev/scheduler_setting", O_RDWR);
 
-	write(fd, "num_slices:5;slice_size:2000", 29);
+	write(fd, "num_slices:8;slice_size:1500", 29);
 	read(fd, buf, 100);
 
 	printf("%s\n", buf);
@@ -76,6 +72,10 @@ int main()
 	//create the threads (as an argument I communicate the scehduling slot, since only the thread itself knows its tid)
 	ret = pthread_create(&mythread[0], NULL , thread_body_common, (void*)2);
 	ret |= pthread_create(&mythread[1], NULL , thread_body_common, (void*)1);
+	ret |= pthread_create(&mythread[1], NULL , thread_body_common, (void*)4);
+	ret |= pthread_create(&mythread[1], NULL , thread_body_common, (void*)5);
+	ret |= pthread_create(&mythread[1], NULL , thread_body_common, (void*)6);
+
 	if (ret) {
 		printf("Errore nella creazione dei thread\n");
 	}

@@ -4,7 +4,6 @@
 #include <linux/init.h>
 #include <linux/miscdevice.h>
 #include <linux/slab.h>
-//#include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/types.h>
@@ -22,7 +21,6 @@ MODULE_DESCRIPTION("Scheduler");
 MODULE_LICENSE("GPL");
 
 #define MAX_MESS_LEN		70
-#define MAX_RESPONSE_LEN	70
 
 
 /*************** DATA STRUCTURES *******************/
@@ -39,27 +37,31 @@ struct schedule_node {
 long int slice_size;
 long int num_slices;
 
-struct schedule_node* task_list;
+struct schedule_node* task_list = 0;
 
 
 /*************** UTILITY FUNCTIONS *****************/
 
+/* 
+ * This works like the classical strtol(). 
+ * It is needed since kstrtol() cannot deal with non-numbers-only strings
+ */
 long int strtol(const char* str, char** endptr, int base)
 {
 	long int res;
 	int err, i;
-	char temp_buf[10];
+	char temp_buf[MAX_MESS_LEN];
 
 	for (i = 0; str[i] >= '0' && str[i] <= '9'; i++)
 		temp_buf[i] = str[i];
 
 	temp_buf[i] = '\0';
 	
-	err = kstrtol (temp_buf, base, &res);
+	err = kstrtol(temp_buf, base, &res);
 	if (err) 
 		return -1;
 
-	//endptr setting (Do this at the end beacuse it could be a pointer to str!)
+	//endptr setting (Do this at the end beacuse endptr could be a pointer to str!)
 	*endptr = (char*)str + i;
 	
 	return res;
@@ -90,7 +92,7 @@ int scheduler_body(void* arg)
 
 	printk("The scheduler is running!\n");
 
-	//scheduler's affinity
+	//set scheduler's affinity
 	cpumask_clear(&mask);
 	cpumask_set_cpu(smp_processor_id(), &mask);
 	sched_setaffinity(current->pid, &mask);
@@ -125,10 +127,11 @@ int scheduler_body(void* arg)
 			if (tid != 0) {
 				printk("[%d, %ld] Scheduling task\n", i, tid);		
 
+				task = pid_task(find_vpid(tid), PIDTYPE_PID);
 				wake_up_process(task);
 			}
 
-			//sleep
+			//sleep for the remaining time of the slot
 			delay_us = ( (time_cycle_start + (i+1)*1000000*slice_size) - ktime_get_ns() ) / 1000;
 			printk("%d - sleep for %llu\n", i, delay_us);
 			usleep_range(delay_us, delay_us);
@@ -166,7 +169,6 @@ int start_scheduler(void)
 
 	//set real-time priority for the scheduler
 	params.sched_priority = 99;
-
 	sched_setscheduler(sched_thread_descr, SCHED_FIFO, &params);
 
 	return 0;
@@ -251,16 +253,18 @@ static int communication_close(struct inode *inode, struct file *file)
 
 ssize_t communication_read(struct file *file, char __user *buf, size_t len, loff_t *ppos)
 {
-	char response[MAX_RESPONSE_LEN];
+	char* response;
 	int resp_len = 0;
 	int err, i;
 
 	if (num_slices <= 0 || slice_size <= 0)
 		return -EFAULT;
 
+	response = kmalloc(len + 10, GFP_KERNEL);		//10 is a good safety margin
+
 	resp_len += sprintf(response, "num_slices: %ld; slice_size: %ld\n", num_slices, slice_size);
 
-	for (i = 0; i < num_slices; i++) {
+	for (i = 0; i < num_slices && resp_len < len; i++) {
 
 		if (task_list[i].thread_id == 0)
 			resp_len += sprintf(response + resp_len, "--,");
@@ -272,6 +276,8 @@ ssize_t communication_read(struct file *file, char __user *buf, size_t len, loff
 		resp_len = len;
   
 	err = copy_to_user(buf, response, resp_len);
+
+	kfree(response);
 
 	if (err)
 		return -EFAULT;
@@ -289,7 +295,7 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 	long int slice_id, task_id;
 
 	if(count > MAX_MESS_LEN)
-		return -1;
+		return -EFAULT;
 	
 	err = copy_from_user(message_buffer, buf, count);
   	if (err) {
@@ -301,14 +307,14 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 
 	while( (found = strsep(&message_buffer_ptr, ":"), message_buffer_ptr != NULL) ) {
 
-		if(strncmp("slice_size", found, 10) == 0) {
+		if(strlen(found) == 10 && strncmp("slice_size", found, 10) == 0) {
 
 			slice_size = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 			
 			if (slice_size <= 0)
 				return -EFAULT;
 
-		} else if (strncmp("num_slices", found, 10) == 0 && num_slices == 0) {
+		} else if (strlen(found) == 10 && strncmp("num_slices", found, 10) == 0 && num_slices == 0) {
 
 			num_slices = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 
@@ -316,15 +322,15 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 				return -EFAULT;
 
 			task_list = kmalloc(num_slices*sizeof(struct schedule_node), GFP_KERNEL);
+			if (task_list == NULL)
+				return -EFAULT;
+
 			for (i = 0; i < num_slices; i++) {
 				task_list[i].thread_id = 0;
 				task_list[i].slot_number = i;
 			}
 
-			if (task_list == NULL)
-				return -EFAULT;
-
-		} else if ((strncmp("slice", found, 5) == 0)) {
+		} else if (strlen(found) == 5 && strncmp("slice", found, 5) == 0) {
 			
 			slice_id = strtol(message_buffer_ptr, &message_buffer_ptr, 10);
 
@@ -340,15 +346,15 @@ ssize_t communication_write(struct file *file, const char __user * buf, size_t c
 
 			task_list[slice_id].thread_id = task_id;
 		
-		} else if ((strncmp("ctrl", found, 5) == 0)) {
+		} else if (strlen(found) == 4 && strncmp("ctrl", found, 4) == 0) {
 			found = strsep(&message_buffer_ptr, ";");
 
-			if (found == NULL)
+			if (message_buffer_ptr == NULL)
 				return -EFAULT;
 
-			if (strcmp(found, "start") == 0)
+			if (strlen(found) == 5 && strcmp(found, "start") == 0)
 				start_scheduler();
-			else if (strcmp(found, "stop") == 0)
+			else if (strlen(found) == 4 && strcmp(found, "stop") == 0)
 				stop_scheduler();
 			else
 				return -EFAULT;
@@ -391,10 +397,12 @@ static int testmodule_init(void)
 	int res;
 
 	res = misc_register(&parking_device);
-	res = misc_register(&communication_device);
+	res |= misc_register(&communication_device);
 
-
-	printk("Misc Register returned %d\n", res);
+	if (res != 0) {
+		printk("Error: misc_register returned %d\n", res);
+		return res;
+	}
 
 	return 0;
 }
@@ -403,40 +411,12 @@ static void testmodule_exit(void)
 {
 	misc_deregister(&parking_device);
 	misc_deregister(&communication_device);
+
+	if(task_list == 0)
+		kfree(task_list);
 }
 
 module_init(testmodule_init);
 module_exit(testmodule_exit);
 
 
-
-/* by Matteo Zini on 25/01/2021 */
-/*void suspend_task(struct task_struct *tsk)
-{
-	struct rq *rq;
-	struct rq_flags rf;
-	int cpu;
-
-	//preempt_disable();
-
-	cpu = smp_processor_id();
-	rq = cpu_rq(cpu);
-
-	//local_irq_disable();
-
-	rq_lock(rq, &rf);
-	smp_mb__after_spinlock();
-
-	// Promote REQ to ACT
-	rq->clock_update_flags <<= 1;
-	update_rq_clock(rq);
-
-	deactivate_task(rq, tsk, DEQUEUE_SLEEP | DEQUEUE_NOCLOCK);
-
-	rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
-	//rq_unlock_irq(rq, &rf);
-
-	//sched_preempt_enable_no_resched();
-}
-
-EXPORT_SYMBOL(suspend_task);*/

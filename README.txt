@@ -12,7 +12,7 @@ Instructions for the usage of this kernel module:
 -	Run the example on qemu:
 		make run
 -	When Linux is running, execute the following command:
-		sudo sh /test/test_run
+		sudo sh /test/test_run.sh
 	This will run the test
 
 Instructions to modify the test settings:

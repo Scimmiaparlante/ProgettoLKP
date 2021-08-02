@@ -48,7 +48,7 @@ EXPORT_SYMBOL(sched_setaffinity);
 
 /*
  * The module works with Linux 5.8.14
- * On newer versions (probably starting from 5.9), also sched_setscheduler() has been removed from the export. 
+ * On newer versions (probably starting from 5.9), also sched_setscheduler() has been removed from the exports. 
  * Thus, you should also add this: (for more info: https://lkml.org/lkml/2020/4/22/1068)
  */
  
@@ -59,7 +59,6 @@ EXPORT_SYMBOL_GPL(sched_setscheduler);
  * FILE: include/linux/sched.h
  */
 
-/* by Matteo Zini on 25/01/2021 */
 extern void suspend_task(struct task_struct *tsk);
 extern long sched_setaffinity(pid_t pid, const struct cpumask *in_mask);
 
